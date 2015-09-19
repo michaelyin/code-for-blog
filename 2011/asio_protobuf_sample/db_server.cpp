@@ -180,7 +180,7 @@ struct DbServer::DbServerImpl
         // single-threaded.
         //
         DbConnection::Pointer new_connection = 
-            DbConnection::create(acceptor.io_service(), db);
+            DbConnection::create(acceptor.get_io_service(), db);
 
         // Asynchronously wait to accept a new client
         //
