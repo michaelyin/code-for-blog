@@ -23,7 +23,7 @@ public:
 
 private:
     DbServer();
-    void start_accept();
+    //void start_accept();
 
     struct DbServerImpl;
     boost::scoped_ptr<DbServerImpl> d;
