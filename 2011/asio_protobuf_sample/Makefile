@@ -7,12 +7,12 @@ BOOST_LFLAGS = -lboost_system
 
 
 server_main: server_main.o stringdb.pb.o db_server.o 
-	g++ -o server_main server_main.o db_server.o stringdb.pb.o \
+	g++ -o server_main server_main.o db_server.o stringdb.pb.o ocrRequest.pb.o ocrResponse.pb.o\
 		$(PROTOBUF_LFLAGS) $(BOOST_LFLAGS)
 
 stringdb.pb.o: stringdb.proto
-	protoc --cpp_out=. --python_out=. stringdb.proto
-	g++ -c stringdb.pb.cc $(PROTOBUF_CFLAGS)
+	protoc --cpp_out=. --python_out=. stringdb.proto ocrRequest.proto ocrResponse.proto
+	g++ -c stringdb.pb.cc ocrRequest.pb.cc ocrResponse.pb.cc $(PROTOBUF_CFLAGS)
 
 HEADERS = $(wildcard *.h)
 

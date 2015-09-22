@@ -7,6 +7,8 @@
 #include "db_server.h"
 #include "packedmessage.h"
 #include "stringdb.pb.h"
+#include "ocrRequest.pb.h"
+#include "ocrResponse.pb.h"
 #include <cassert>
 #include <iostream>
 #include <map>
@@ -38,8 +40,9 @@ class DbConnection : public boost::enable_shared_from_this<DbConnection>
 {
 public:
     typedef boost::shared_ptr<DbConnection> Pointer;
-    typedef boost::shared_ptr<stringdb::Request> RequestPointer;
-    typedef boost::shared_ptr<stringdb::Response> ResponsePointer;
+    typedef boost::shared_ptr<hanvon::OCRRequest> RequestPointer;
+    typedef boost::shared_ptr<hanvon::OCRResponse> ResponsePointer;
+    typedef boost::shared_ptr<hanvon::ResultsMap>  ResultMapPointer;
 
     static Pointer create(asio::io_service& io_service, StringDatabase& db)
     {
@@ -60,11 +63,11 @@ private:
     tcp::socket m_socket;
     StringDatabase& m_db_ref;
     vector<uint8_t> m_readbuf;
-    PackedMessage<stringdb::Request> m_packed_request;
+    PackedMessage<hanvon::OCRRequest> m_packed_request;
 
     DbConnection(asio::io_service& io_service, StringDatabase& db)
         : m_socket(io_service), m_db_ref(db),
-        m_packed_request(boost::shared_ptr<stringdb::Request>(new stringdb::Request()))
+        m_packed_request(boost::shared_ptr<hanvon::OCRRequest>(new hanvon::OCRRequest()))
     {
     }
     
@@ -102,10 +105,19 @@ private:
             ResponsePointer resp = prepare_response(req);
             
             vector<uint8_t> writebuf;
-            PackedMessage<stringdb::Response> resp_msg(resp);
+            PackedMessage<hanvon::OCRResponse> resp_msg(resp);
             resp_msg.pack(writebuf);
-            asio::write(m_socket, asio::buffer(writebuf));
+            asio::async_write(m_socket, asio::buffer(writebuf), boost::bind(&DbConnection::handle_write, shared_from_this(),
+                    asio::placeholders::error));
+            //asio::write(m_socket, asio::buffer(writebuf));
+
         }
+    }
+
+    void handle_write(const boost::system::error_code &ec)
+    {
+      if (!ec)
+        m_socket.shutdown(tcp::socket::shutdown_send);
     }
 
     void start_read_header()
@@ -132,31 +144,32 @@ private:
     ResponsePointer prepare_response(RequestPointer req)
     {
         string value;
-        switch (req->type())
-        {
-            case stringdb::Request::GET_VALUE: 
-            {
-                StringDatabase::iterator i = m_db_ref.find(req->request_get_value().key());
-                value = i == m_db_ref.end() ? "" : i->second;
-                break; 
-            }
-            case stringdb::Request::SET_VALUE:
-                value = req->request_set_value().value();
-                m_db_ref[req->request_set_value().key()] = value;
-                break;
-            case stringdb::Request::COUNT_VALUES:
-            {
-                stringstream sstr;
-                sstr << m_db_ref.size();
-                value = sstr.str();
-                break;
-            }
-            default:
-                assert(0 && "Whoops, bad request!");
-                break;
+        string image = req->image();
+        DEBUG && (cerr << "received image: " << image << '\n');
+
+        DEBUG && (cerr << "image length: " << image.length() << '\n');
+        DEBUG && (cerr << "sender: " << req->sendername() << '\n');
+        DEBUG && (cerr << "seq num:  " << req->seqnum() << '\n');
+
+        for(int i=0;i<image.length(); i++){
+        	 DEBUG && (cerr << "image byte: " << i  << image[i] << '\n');
         }
-        ResponsePointer resp(new stringdb::Response);
-        resp->set_value(value);
+
+        DEBUG && (cerr << "prepare response\n");
+
+        ResponsePointer resp(new hanvon::OCRResponse);
+        //ResultMapPointer map = ResultMapPointer(new hanvon::ResultsMap());
+        hanvon::ResultsMap* map = new hanvon::ResultsMap();
+
+        resp->set_allocated_results(map);
+
+        hanvon::MapEntry* entry = map->add_mapentry();
+        entry->set_key(string("equation result 1"));
+        entry->set_value(string("${|\sqrt [L]{(x+2)^{2}+y^{2}}-\sqrt [L]{(x-2)^{2}+y^{2}}|=2}$可化成${x^{2}-\\frac {y^{2}}{3}=1}$的形式."));
+
+        google::protobuf::int32 seq = 9999;
+        resp->set_seqnum(seq);
+        resp->set_error("error message generated!!!产生错误信息！");
         return resp;
     }
 };
